@@ -55,10 +55,17 @@ export const EXCHANGES: Record<string, {
     spotSuffix: '/USDT',
     futuresSuffix: '/USDT:USDT',
   },
+  hyperliquid: {
+    name: 'Hyperliquid',
+    hasSpot: false,
+    hasFutures: true,
+    spotSuffix: '',
+    futuresSuffix: '/USDC:USDC',
+  },
 };
 
 // 현선갭: 선물 기준 거래소 목록
-export const FUTURES_BASE_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'htx'];
+export const FUTURES_BASE_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'htx', 'hyperliquid'];
 
 // 현선갭: 현물 비교 거래소 목록
 export const SPOT_COMPARE_EXCHANGES = ['binance', 'bybit', 'okx', 'gate', 'bitget', 'mexc', 'htx'];

@@ -11,6 +11,7 @@ const EXCHANGES_CONFIG: Record<string, {
   class: string;
   futuresClass?: string;
   options?: object;
+  futuresSuffix?: string;
 }> = {
   binance: { class: 'binance' },
   bybit: { class: 'bybit' },
@@ -19,6 +20,7 @@ const EXCHANGES_CONFIG: Record<string, {
   mexc: { class: 'mexc' },
   gate: { class: 'gate' },
   htx: { class: 'htx' },
+  hyperliquid: { class: 'hyperliquid', futuresSuffix: '/USDC:USDC' },
 };
 
 // 타임아웃 래퍼 함수
@@ -50,13 +52,15 @@ async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<numbe
 
 async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<number | null> {
   try {
-    const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
+    const config = EXCHANGES_CONFIG[exchangeId];
+    const ExchangeClass = ccxt[config.class];
     const exchange = new ExchangeClass({
       enableRateLimit: false,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });
-    const ticker = await exchange.fetchTicker(`${symbol}/USDT:USDT`);
+    const suffix = config.futuresSuffix || '/USDT:USDT';
+    const ticker = await exchange.fetchTicker(`${symbol}${suffix}`);
     return ticker?.last || null;
   } catch (error) {
     return null;
@@ -65,13 +69,15 @@ async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<nu
 
 async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ rate: number | null; nextTime: string }> {
   try {
-    const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
+    const config = EXCHANGES_CONFIG[exchangeId];
+    const ExchangeClass = ccxt[config.class];
     const exchange = new ExchangeClass({
       enableRateLimit: false,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });
-    const funding = await exchange.fetchFundingRate(`${symbol}/USDT:USDT`);
+    const suffix = config.futuresSuffix || '/USDT:USDT';
+    const funding = await exchange.fetchFundingRate(`${symbol}${suffix}`);
 
     let nextTime = 'N/A';
     const nextTs = funding?.nextFundingTimestamp || funding?.fundingTimestamp;
