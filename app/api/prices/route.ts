@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Vercel 서버리스 함수 설정
+export const maxDuration = 10; // 최대 10초 (hobby plan 최대)
+export const dynamic = 'force-dynamic';
+
 // ccxt는 서버 사이드에서만 실행
 const ccxt = require('ccxt');
 
@@ -17,20 +21,29 @@ const EXCHANGES_CONFIG: Record<string, {
   htx: { class: 'htx' },
 };
 
+// 타임아웃 래퍼 함수
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  const timeout = new Promise<T>((resolve) => {
+    setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, timeout]);
+}
+
 interface ExchangeData {
   spot: Record<string, number | null>;
   futures: Record<string, number | null>;
   funding: Record<string, { rate: number | null; nextTime: string }>;
 }
 
+const REQUEST_TIMEOUT = 4000; // 개별 요청 4초 타임아웃
+
 async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<number | null> {
   try {
     const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
-    const exchange = new ExchangeClass({ enableRateLimit: true, timeout: 10000 });
+    const exchange = new ExchangeClass({ enableRateLimit: false, timeout: REQUEST_TIMEOUT });
     const ticker = await exchange.fetchTicker(`${symbol}/USDT`);
     return ticker?.last || null;
   } catch (error) {
-    console.error(`Spot ${exchangeId} error:`, error);
     return null;
   }
 }
@@ -39,14 +52,13 @@ async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<nu
   try {
     const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
     const exchange = new ExchangeClass({
-      enableRateLimit: true,
-      timeout: 10000,
+      enableRateLimit: false,
+      timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });
     const ticker = await exchange.fetchTicker(`${symbol}/USDT:USDT`);
     return ticker?.last || null;
   } catch (error) {
-    console.error(`Futures ${exchangeId} error:`, error);
     return null;
   }
 }
@@ -55,8 +67,8 @@ async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ r
   try {
     const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
     const exchange = new ExchangeClass({
-      enableRateLimit: true,
-      timeout: 10000,
+      enableRateLimit: false,
+      timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });
     const funding = await exchange.fetchFundingRate(`${symbol}/USDT:USDT`);
@@ -74,7 +86,6 @@ async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ r
       nextTime,
     };
   } catch (error) {
-    console.error(`Funding ${exchangeId} error:`, error);
     return { rate: null, nextTime: 'N/A' };
   }
 }

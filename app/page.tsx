@@ -46,7 +46,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchData]);
 
@@ -314,7 +314,7 @@ export default function Dashboard() {
             checked={autoRefresh}
             onChange={(e) => setAutoRefresh(e.target.checked)}
           />
-          <span>자동 새로고침 (10초)</span>
+          <span>자동 새로고침 (5초)</span>
         </label>
       </div>
 
