@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { EXCHANGES, SPOT_EXCHANGES, FUTURES_EXCHANGES, FUTURES_BASE_EXCHANGES, SPOT_COMPARE_EXCHANGES, calculatePremium, calculateGap, formatPrice, formatPercent, formatFundingRate } from '@/lib/exchanges';
 
-const VERSION = 'v1.0';
+const VERSION = 'v1.1';
 const GAP_HIGHLIGHT_THRESHOLD = 0.5;
 
 interface PriceData {

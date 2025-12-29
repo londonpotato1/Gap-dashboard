@@ -41,6 +41,10 @@ const REQUEST_TIMEOUT = 4000; // 개별 요청 4초 타임아웃
 
 async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<number | null> {
   try {
+    // Hyperliquid는 현물이 없음
+    if (exchangeId === 'hyperliquid') {
+      return null;
+    }
     const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
     const exchange = new ExchangeClass({ enableRateLimit: false, timeout: REQUEST_TIMEOUT });
     const ticker = await exchange.fetchTicker(`${symbol}/USDT`);
