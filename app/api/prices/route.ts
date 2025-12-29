@@ -54,8 +54,10 @@ async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<nu
   try {
     const config = EXCHANGES_CONFIG[exchangeId];
     const ExchangeClass = ccxt[config.class];
+    // Hyperliquid는 rate limit 필요
+    const needsRateLimit = exchangeId === 'hyperliquid';
     const exchange = new ExchangeClass({
-      enableRateLimit: false,
+      enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });
@@ -71,8 +73,10 @@ async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ r
   try {
     const config = EXCHANGES_CONFIG[exchangeId];
     const ExchangeClass = ccxt[config.class];
+    // Hyperliquid는 rate limit 필요
+    const needsRateLimit = exchangeId === 'hyperliquid';
     const exchange = new ExchangeClass({
-      enableRateLimit: false,
+      enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
     });

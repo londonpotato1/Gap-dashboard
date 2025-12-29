@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { EXCHANGES, SPOT_EXCHANGES, FUTURES_EXCHANGES, FUTURES_BASE_EXCHANGES, SPOT_COMPARE_EXCHANGES, calculatePremium, calculateGap, formatPrice, formatPercent } from '@/lib/exchanges';
+import { EXCHANGES, SPOT_EXCHANGES, FUTURES_EXCHANGES, FUTURES_BASE_EXCHANGES, SPOT_COMPARE_EXCHANGES, calculatePremium, calculateGap, formatPrice, formatPercent, formatFundingRate } from '@/lib/exchanges';
 
 const VERSION = 'v1.0';
 const GAP_HIGHLIGHT_THRESHOLD = 0.5;
@@ -259,16 +259,16 @@ export default function Dashboard() {
                 <td style={{ color: '#00bfff', fontWeight: 600 }}>{row.nameA}</td>
                 <td>{formatPrice(row.priceA)}</td>
                 <td className={row.fundingA !== null ? (row.fundingA >= 0 ? 'positive' : 'negative') : ''}>
-                  {formatPercent(row.fundingA)}
+                  {formatFundingRate(row.fundingA)}
                 </td>
                 <td className={row.gap !== null ? (row.gap >= 0 ? 'positive' : 'negative') : ''} style={{ fontWeight: 600 }}>
                   {formatPercent(row.gap)}
                 </td>
                 <td className={row.fundingDiff !== null ? (row.fundingDiff >= 0 ? 'positive' : 'negative') : ''}>
-                  {formatPercent(row.fundingDiff)}
+                  {formatFundingRate(row.fundingDiff)}
                 </td>
                 <td className={row.fundingB !== null ? (row.fundingB >= 0 ? 'positive' : 'negative') : ''}>
-                  {formatPercent(row.fundingB)}
+                  {formatFundingRate(row.fundingB)}
                 </td>
                 <td>{formatPrice(row.priceB)}</td>
                 <td style={{ fontWeight: 600 }}>{row.nameB}</td>
