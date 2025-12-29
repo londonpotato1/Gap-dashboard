@@ -12,10 +12,10 @@ const EXCHANGES_CONFIG: Record<string, {
   futuresClass?: string;
   options?: object;
   futuresSuffix?: string;
-  needsAltEndpoint?: boolean;
+  useDirectApi?: boolean;
 }> = {
-  binance: { class: 'binance', needsAltEndpoint: true },
-  bybit: { class: 'bybit', needsAltEndpoint: true },
+  binance: { class: 'binance', useDirectApi: true },
+  bybit: { class: 'bybit', useDirectApi: true },
   okx: { class: 'okx' },
   bitget: { class: 'bitget' },
   mexc: { class: 'mexc' },
@@ -23,6 +23,100 @@ const EXCHANGES_CONFIG: Record<string, {
   htx: { class: 'htx' },
   hyperliquid: { class: 'hyperliquid', futuresSuffix: '/USDC:USDC' },
 };
+
+// 바이낸스/바이빗 직접 API 호출 함수 (Vercel 지역 제한 우회)
+async function fetchBinanceSpot(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(data.price) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBinanceFutures(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(data.price) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBinanceFunding(symbol: string): Promise<{ rate: number | null; nextTime: string }> {
+  try {
+    const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return { rate: null, nextTime: 'N/A' };
+    const data = await res.json();
+    const rate = parseFloat(data.lastFundingRate) * 100;
+    const nextTs = data.nextFundingTime;
+    let nextTime = 'N/A';
+    if (nextTs) {
+      const date = new Date(nextTs);
+      nextTime = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return { rate, nextTime };
+  } catch {
+    return { rate: null, nextTime: 'N/A' };
+  }
+}
+
+async function fetchBybitSpot(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(data.result?.list?.[0]?.lastPrice) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBybitFutures(symbol: string): Promise<number | null> {
+  try {
+    const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return parseFloat(data.result?.list?.[0]?.lastPrice) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchBybitFunding(symbol: string): Promise<{ rate: number | null; nextTime: string }> {
+  try {
+    const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}USDT`, {
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+    });
+    if (!res.ok) return { rate: null, nextTime: 'N/A' };
+    const data = await res.json();
+    const ticker = data.result?.list?.[0];
+    const rate = parseFloat(ticker?.fundingRate) * 100;
+    const nextTs = parseInt(ticker?.nextFundingTime);
+    let nextTime = 'N/A';
+    if (nextTs) {
+      const date = new Date(nextTs);
+      nextTime = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return { rate: isNaN(rate) ? null : rate, nextTime };
+  } catch {
+    return { rate: null, nextTime: 'N/A' };
+  }
+}
 
 // 타임아웃 래퍼 함수
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -47,22 +141,17 @@ async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<numbe
       return null;
     }
 
-    const config = EXCHANGES_CONFIG[exchangeId];
-    const ExchangeClass = ccxt[config.class];
-
-    // 바이낸스/바이빗은 대체 호스트 사용 (Vercel 지역 제한 우회)
-    const exchangeOptions: any = {
-      enableRateLimit: false,
-      timeout: REQUEST_TIMEOUT
-    };
-
+    // 바이낸스/바이빗은 직접 API 사용
     if (exchangeId === 'binance') {
-      exchangeOptions.hostname = 'api1.binance.com'; // 대체 엔드포인트
-    } else if (exchangeId === 'bybit') {
-      exchangeOptions.hostname = 'api.bybit.com';
+      return await fetchBinanceSpot(symbol);
+    }
+    if (exchangeId === 'bybit') {
+      return await fetchBybitSpot(symbol);
     }
 
-    const exchange = new ExchangeClass(exchangeOptions);
+    const config = EXCHANGES_CONFIG[exchangeId];
+    const ExchangeClass = ccxt[config.class];
+    const exchange = new ExchangeClass({ enableRateLimit: false, timeout: REQUEST_TIMEOUT });
     const ticker = await exchange.fetchTicker(`${symbol}/USDT`);
     return ticker?.last || null;
   } catch (error) {
@@ -73,25 +162,24 @@ async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<numbe
 
 async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<number | null> {
   try {
+    // 바이낸스/바이빗은 직접 API 사용
+    if (exchangeId === 'binance') {
+      return await fetchBinanceFutures(symbol);
+    }
+    if (exchangeId === 'bybit') {
+      return await fetchBybitFutures(symbol);
+    }
+
     const config = EXCHANGES_CONFIG[exchangeId];
     const ExchangeClass = ccxt[config.class];
     // Hyperliquid는 rate limit 필요
     const needsRateLimit = exchangeId === 'hyperliquid';
 
-    const exchangeOptions: any = {
+    const exchange = new ExchangeClass({
       enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
-    };
-
-    // 바이낸스/바이빗 선물 대체 엔드포인트
-    if (exchangeId === 'binance') {
-      exchangeOptions.hostname = 'fapi.binance.com';
-    } else if (exchangeId === 'bybit') {
-      exchangeOptions.hostname = 'api.bybit.com';
-    }
-
-    const exchange = new ExchangeClass(exchangeOptions);
+    });
     const suffix = config.futuresSuffix || '/USDT:USDT';
     const ticker = await exchange.fetchTicker(`${symbol}${suffix}`);
     return ticker?.last || null;
@@ -103,25 +191,24 @@ async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<nu
 
 async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ rate: number | null; nextTime: string }> {
   try {
+    // 바이낸스/바이빗은 직접 API 사용
+    if (exchangeId === 'binance') {
+      return await fetchBinanceFunding(symbol);
+    }
+    if (exchangeId === 'bybit') {
+      return await fetchBybitFunding(symbol);
+    }
+
     const config = EXCHANGES_CONFIG[exchangeId];
     const ExchangeClass = ccxt[config.class];
     // Hyperliquid는 rate limit 필요
     const needsRateLimit = exchangeId === 'hyperliquid';
 
-    const exchangeOptions: any = {
+    const exchange = new ExchangeClass({
       enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
-    };
-
-    // 바이낸스/바이빗 선물 대체 엔드포인트
-    if (exchangeId === 'binance') {
-      exchangeOptions.hostname = 'fapi.binance.com';
-    } else if (exchangeId === 'bybit') {
-      exchangeOptions.hostname = 'api.bybit.com';
-    }
-
-    const exchange = new ExchangeClass(exchangeOptions);
+    });
     const suffix = config.futuresSuffix || '/USDT:USDT';
     const funding = await exchange.fetchFundingRate(`${symbol}${suffix}`);
 
