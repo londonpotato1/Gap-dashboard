@@ -12,9 +12,10 @@ const EXCHANGES_CONFIG: Record<string, {
   futuresClass?: string;
   options?: object;
   futuresSuffix?: string;
+  needsAltEndpoint?: boolean;
 }> = {
-  binance: { class: 'binance' },
-  bybit: { class: 'bybit' },
+  binance: { class: 'binance', needsAltEndpoint: true },
+  bybit: { class: 'bybit', needsAltEndpoint: true },
   okx: { class: 'okx' },
   bitget: { class: 'bitget' },
   mexc: { class: 'mexc' },
@@ -45,11 +46,27 @@ async function fetchSpotPrice(exchangeId: string, symbol: string): Promise<numbe
     if (exchangeId === 'hyperliquid') {
       return null;
     }
-    const ExchangeClass = ccxt[EXCHANGES_CONFIG[exchangeId].class];
-    const exchange = new ExchangeClass({ enableRateLimit: false, timeout: REQUEST_TIMEOUT });
+
+    const config = EXCHANGES_CONFIG[exchangeId];
+    const ExchangeClass = ccxt[config.class];
+
+    // 바이낸스/바이빗은 대체 호스트 사용 (Vercel 지역 제한 우회)
+    const exchangeOptions: any = {
+      enableRateLimit: false,
+      timeout: REQUEST_TIMEOUT
+    };
+
+    if (exchangeId === 'binance') {
+      exchangeOptions.hostname = 'api1.binance.com'; // 대체 엔드포인트
+    } else if (exchangeId === 'bybit') {
+      exchangeOptions.hostname = 'api.bybit.com';
+    }
+
+    const exchange = new ExchangeClass(exchangeOptions);
     const ticker = await exchange.fetchTicker(`${symbol}/USDT`);
     return ticker?.last || null;
   } catch (error) {
+    console.error(`Spot ${exchangeId} error:`, error);
     return null;
   }
 }
@@ -60,15 +77,26 @@ async function fetchFuturesPrice(exchangeId: string, symbol: string): Promise<nu
     const ExchangeClass = ccxt[config.class];
     // Hyperliquid는 rate limit 필요
     const needsRateLimit = exchangeId === 'hyperliquid';
-    const exchange = new ExchangeClass({
+
+    const exchangeOptions: any = {
       enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
-    });
+    };
+
+    // 바이낸스/바이빗 선물 대체 엔드포인트
+    if (exchangeId === 'binance') {
+      exchangeOptions.hostname = 'fapi.binance.com';
+    } else if (exchangeId === 'bybit') {
+      exchangeOptions.hostname = 'api.bybit.com';
+    }
+
+    const exchange = new ExchangeClass(exchangeOptions);
     const suffix = config.futuresSuffix || '/USDT:USDT';
     const ticker = await exchange.fetchTicker(`${symbol}${suffix}`);
     return ticker?.last || null;
   } catch (error) {
+    console.error(`Futures ${exchangeId} error:`, error);
     return null;
   }
 }
@@ -79,11 +107,21 @@ async function fetchFundingRate(exchangeId: string, symbol: string): Promise<{ r
     const ExchangeClass = ccxt[config.class];
     // Hyperliquid는 rate limit 필요
     const needsRateLimit = exchangeId === 'hyperliquid';
-    const exchange = new ExchangeClass({
+
+    const exchangeOptions: any = {
       enableRateLimit: needsRateLimit,
       timeout: REQUEST_TIMEOUT,
       options: { defaultType: 'swap' }
-    });
+    };
+
+    // 바이낸스/바이빗 선물 대체 엔드포인트
+    if (exchangeId === 'binance') {
+      exchangeOptions.hostname = 'fapi.binance.com';
+    } else if (exchangeId === 'bybit') {
+      exchangeOptions.hostname = 'api.bybit.com';
+    }
+
+    const exchange = new ExchangeClass(exchangeOptions);
     const suffix = config.futuresSuffix || '/USDT:USDT';
     const funding = await exchange.fetchFundingRate(`${symbol}${suffix}`);
 
